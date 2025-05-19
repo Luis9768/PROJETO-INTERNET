@@ -2,6 +2,7 @@
 #include "internet.h"
 #include <PubSubClient.h>
 #include <WiFi.h>
+#define pinLed 2
 
 WiFiClient espClient;
 PubSubClient client(espClient);
@@ -12,6 +13,7 @@ const char *mqtt_id = "esp32-senai134-luis";
 const char *mqtt_topic_sub = "senai134/mesa07/esp_inscrito";
 const char *mqtt_topic_pub = "senai134/mesa07/esp_publicando";
 
+
 void callback(char *, byte *, unsigned int);
 void mqttConnect(void);
 
@@ -21,11 +23,23 @@ void setup()
   conectaWiFi();
   client.setServer(mqtt_server, mqtt_port);
   client.setCallback(callback);
+  pinMode(pinLed, OUTPUT);
 }
 
 void loop()
 {
   checkWiFi();
+  if (!client.connected())
+    mqttConnect();
+  client.loop();
+
+  static unsigned long tempoAnterior = 0;
+  unsigned long tempoAtual = millis();
+  if (tempoAtual - tempoAnterior > 3000)
+  {
+    client.publish(mqtt_topic_pub, "OLA MUNDO");
+    tempoAnterior = tempoAtual;
+  }
 }
 
 void callback(char *topic, byte *payload, unsigned int lenght)
@@ -39,6 +53,18 @@ void callback(char *topic, byte *payload, unsigned int lenght)
     mensagem += c;
   }
   Serial.println(mensagem);
+  if (mensagem == "liga")
+  {
+    digitalWrite(pinLed, HIGH);
+  }
+  if (mensagem == "desliga")
+  {
+    digitalWrite(pinLed, LOW);
+  }
+  if(mensagem == "pisca")
+  {
+
+  }
 }
 void mqttConnect()
 {
