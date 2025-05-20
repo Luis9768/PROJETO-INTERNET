@@ -13,9 +13,12 @@ const char *mqtt_id = "esp32-senai134-luis";
 const char *mqtt_topic_sub = "senai134/mesa07/esp_inscrito";
 const char *mqtt_topic_pub = "senai134/mesa07/esp_publicando";
 
+bool estadoLed = false;
+bool modopisca = false;
 
 void callback(char *, byte *, unsigned int);
 void mqttConnect(void);
+void controleDosleds(void);
 
 void setup()
 {
@@ -40,6 +43,7 @@ void loop()
     client.publish(mqtt_topic_pub, "OLA MUNDO");
     tempoAnterior = tempoAtual;
   }
+  controleDosleds();
 }
 
 void callback(char *topic, byte *payload, unsigned int lenght)
@@ -53,20 +57,32 @@ void callback(char *topic, byte *payload, unsigned int lenght)
     mensagem += c;
   }
   Serial.println(mensagem);
+  mensagem.trim();
+  mensagem.toLowerCase();
   if (mensagem == "liga")
   {
-    digitalWrite(pinLed, HIGH);
+    estadoLed = true;
+    modopisca = false;
+    Serial.println("Led ligado");
   }
-  if (mensagem == "desliga")
+  else if (mensagem == "desliga")
   {
-    digitalWrite(pinLed, LOW);
+    Serial.println("Led desligado");
+    estadoLed = false;
+    modopisca = false;
   }
-  if(mensagem == "pisca")
+  else if  (mensagem == "pisca")
   {
-
+    Serial.println("Led piscando");
+    modopisca = true;
+  }
+  else
+  {
+Serial.println("comando nao reconhecido");
   }
 }
 void mqttConnect()
+
 {
   while (!client.connected())
   {
@@ -85,4 +101,19 @@ void mqttConnect()
       delay(5000);
     }
   }
+}
+void controleDosleds()
+{
+  digitalWrite(pinLed,estadoLed);
+  static unsigned long ultimaMudanca = 0;
+  unsigned long agora = millis();
+  if(modopisca)
+  {
+    if(agora-ultimaMudanca > 500)
+    {
+      estadoLed = !estadoLed;
+      ultimaMudanca = agora;
+    }
+  }
+  digitalWrite(pinLed,estadoLed);
 }
