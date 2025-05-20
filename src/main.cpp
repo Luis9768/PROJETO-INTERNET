@@ -15,6 +15,9 @@ const char *mqtt_topic_pub = "senai134/mesa07/esp_publicando";
 
 bool estadoLed = false;
 bool modopisca = false;
+float tempoPisca = 1000;
+const int VELOCIDADE_MIN = 50;
+const int VELOCIDADE_MAX = 5000;
 
 void callback(char *, byte *, unsigned int);
 void mqttConnect(void);
@@ -71,14 +74,29 @@ void callback(char *topic, byte *payload, unsigned int lenght)
     estadoLed = false;
     modopisca = false;
   }
-  else if  (mensagem == "pisca")
+  else if (mensagem == "pisca")
   {
     Serial.println("Led piscando");
     modopisca = true;
   }
+  else if (mensagem == "devagar")
+  {
+    tempoPisca *= 1.10;
+    if (tempoPisca > VELOCIDADE_MAX)
+      tempoPisca = VELOCIDADE_MAX;
+    Serial.println("aumento de velocidade");
+    Serial.println(tempoPisca);
+  }
+  else if (mensagem == "rapido")
+  {
+    tempoPisca *= 0.90;
+    if(tempoPisca < VELOCIDADE_MIN) tempoPisca = VELOCIDADE_MIN;
+    Serial.println("diminuicao de velocidade");
+    Serial.println(tempoPisca);
+  }
   else
   {
-Serial.println("comando nao reconhecido");
+    Serial.println("comando nao reconhecido");
   }
 }
 void mqttConnect()
@@ -104,16 +122,17 @@ void mqttConnect()
 }
 void controleDosleds()
 {
-  digitalWrite(pinLed,estadoLed);
+  digitalWrite(pinLed, estadoLed);
   static unsigned long ultimaMudanca = 0;
   unsigned long agora = millis();
-  if(modopisca)
+
+  if (modopisca)
   {
-    if(agora-ultimaMudanca > 500)
+    if (agora - ultimaMudanca > tempoPisca)
     {
       estadoLed = !estadoLed;
       ultimaMudanca = agora;
     }
   }
-  digitalWrite(pinLed,estadoLed);
+  digitalWrite(pinLed, estadoLed);
 }
