@@ -6,14 +6,14 @@
 
 WiFiClient espClient;
 PubSubClient client(espClient);
-//MQTT
+// MQTT
 const char *mqtt_server = "broker.hivemq.com";
 const int mqtt_port = 1883;
 const char *mqtt_id = "esp32-senai134-luis";
 const char *mqtt_topic_sub = "senai134/mesa07/esp_inscrito";
 const char *mqtt_topic_pub = "senai134/mesa07/esp_publicando";
 
-//tratamento leds
+// tratamento leds
 #define pinLed 2
 bool estadoLed = 0;
 bool modoPisca = false;
@@ -62,25 +62,22 @@ void callback(char *topic, byte *payload, unsigned int lenght)
     mensagem += c;
   }
   Serial.println(mensagem);
-  
+
   JsonDocument doc;
   deserializeJson(doc, mensagem);
-  if(!doc["estadoLed"].isNull())
+  if (!doc["estadoLed"].isNull())
   {
     estadoLed = doc["estadoLed"];
-    modoPisca =0;
+    modoPisca = 0;
   }
-  if(!doc[modoPisca].isNull())
+  if (!doc["modoPisca"].isNull())
   {
-modoPisca = doc["modoPisca"];
+    modoPisca = doc["modoPisca"];
   }
-if(!doc["velocidade"].isNull())
-{
-  tempoPisca = doc["velocidade"];
-}
-
-
-
+  if (!doc["velocidade"].isNull())
+  {
+    tempoPisca = doc["velocidade"];
+  }
 }
 void mqttConnect()
 
