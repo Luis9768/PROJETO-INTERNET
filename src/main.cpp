@@ -2,19 +2,21 @@
 #include "internet.h"
 #include <PubSubClient.h>
 #include <WiFi.h>
-#define pinLed 2
+#include <ArduinoJson.h>
 
 WiFiClient espClient;
 PubSubClient client(espClient);
-
+//MQTT
 const char *mqtt_server = "broker.hivemq.com";
 const int mqtt_port = 1883;
 const char *mqtt_id = "esp32-senai134-luis";
 const char *mqtt_topic_sub = "senai134/mesa07/esp_inscrito";
 const char *mqtt_topic_pub = "senai134/mesa07/esp_publicando";
 
-bool estadoLed = false;
-bool modopisca = false;
+//tratamento leds
+#define pinLed 2
+bool estadoLed = 0;
+bool modoPisca = false;
 float tempoPisca = 1000;
 const int VELOCIDADE_MIN = 50;
 const int VELOCIDADE_MAX = 5000;
@@ -60,44 +62,25 @@ void callback(char *topic, byte *payload, unsigned int lenght)
     mensagem += c;
   }
   Serial.println(mensagem);
-  mensagem.trim();
-  mensagem.toLowerCase();
-  if (mensagem == "liga")
+  
+  JsonDocument doc;
+  deserializeJson(doc, mensagem);
+  if(!doc["estadoLed"].isNull())
   {
-    estadoLed = true;
-    modopisca = false;
-    Serial.println("Led ligado");
+    estadoLed = doc["estadoLed"];
+    modoPisca =0;
   }
-  else if (mensagem == "desliga")
+  if(!doc[modoPisca].isNull())
   {
-    Serial.println("Led desligado");
-    estadoLed = false;
-    modopisca = false;
+modoPisca = doc["modoPisca"];
   }
-  else if (mensagem == "pisca")
-  {
-    Serial.println("Led piscando");
-    modopisca = true;
-  }
-  else if (mensagem == "devagar")
-  {
-    tempoPisca *= 1.10;
-    if (tempoPisca > VELOCIDADE_MAX)
-      tempoPisca = VELOCIDADE_MAX;
-    Serial.println("aumento de velocidade");
-    Serial.println(tempoPisca);
-  }
-  else if (mensagem == "rapido")
-  {
-    tempoPisca *= 0.90;
-    if(tempoPisca < VELOCIDADE_MIN) tempoPisca = VELOCIDADE_MIN;
-    Serial.println("diminuicao de velocidade");
-    Serial.println(tempoPisca);
-  }
-  else
-  {
-    Serial.println("comando nao reconhecido");
-  }
+if(!doc["velocidade"].isNull())
+{
+  tempoPisca = doc["velocidade"];
+}
+
+
+
 }
 void mqttConnect()
 
@@ -126,7 +109,7 @@ void controleDosleds()
   static unsigned long ultimaMudanca = 0;
   unsigned long agora = millis();
 
-  if (modopisca)
+  if (modoPisca)
   {
     if (agora - ultimaMudanca > tempoPisca)
     {
