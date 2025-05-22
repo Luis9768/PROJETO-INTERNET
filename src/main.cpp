@@ -3,9 +3,11 @@
 #include <PubSubClient.h>
 #include <WiFi.h>
 #include <ArduinoJson.h>
+#include <Bounce2.h>
 
 WiFiClient espClient;
 PubSubClient client(espClient);
+Bounce botaoDebounce = Bounce();
 // MQTT
 const char *mqtt_server = "broker.hivemq.com";
 const int mqtt_port = 1883;
@@ -15,11 +17,12 @@ const char *mqtt_topic_pub = "senai134/mesa07/esp_publicando";
 
 // tratamento leds
 #define pinLed 2
+#define pinBotao 0
 bool estadoLed = 0;
 bool modoPisca = false;
 float tempoPisca = 1000;
-const int VELOCIDADE_MIN = 50;
-const int VELOCIDADE_MAX = 5000;
+bool estadoBotao = 0;
+static bool estadoAnteriorBotao = 0;
 
 void callback(char *, byte *, unsigned int);
 void mqttConnect(void);
@@ -32,6 +35,8 @@ void setup()
   client.setServer(mqtt_server, mqtt_port);
   client.setCallback(callback);
   pinMode(pinLed, OUTPUT);
+  botaoDebounce.attach(pinBotao,INPUT_PULLUP);
+  botaoDebounce.interval(25);
 }
 
 void loop()
@@ -43,11 +48,18 @@ void loop()
 
   static unsigned long tempoAnterior = 0;
   unsigned long tempoAtual = millis();
-  if (tempoAtual - tempoAnterior > 3000)
-  {
-    client.publish(mqtt_topic_pub, "OLA MUNDO");
-    tempoAnterior = tempoAtual;
-  }
+  botaoDebounce.update();
+if(botaoDebounce.fell()){
+  JsonDocument doc;
+
+  doc["botao"] = true;
+  doc["msg"] = "Ola Senai";
+  String mensagem = "";
+
+  serializeJson(doc, mensagem);
+  client.publish(mqtt_topic_pub, mensagem.c_str());
+}
+
   controleDosleds();
 }
 
