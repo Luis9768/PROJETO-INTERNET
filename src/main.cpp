@@ -1,13 +1,24 @@
-#include <Arduino.h>
-#include "internet.h"
-#include <PubSubClient.h>
-#include <WiFi.h>
-#include <ArduinoJson.h>
-#include <Bounce2.h>
+#include <Arduino.h>      //biblioteca do arduino
+#include "internet.h"     //biblioteca pra vc se conectar a internet
+#include <PubSubClient.h> //pra vc publica no MQTT
+#include <WiFi.h>         //pra vc se conectar com o WIFI
+#include <ArduinoJson.h>  // Pra ele ler e fazer umas paradas com o Json
+#include <Bounce2.h>      //Bounce pra não ter ruido no botao
+#include <ezTime.h>
+#include <Adafruit_Sensor.h>
+#include <DHT.h>
+#include <DHT_U.h>
 
-WiFiClient espClient;
-PubSubClient client(espClient);
-Bounce botaoDebounce = Bounce();
+// DHT
+#define DHTPIN 5
+#define DHTTYPE DHT22
+
+WiFiClient espClient;            // Objeto do WIFI para vc se conectar
+PubSubClient client(espClient);  // Se conecta ao mqtt
+Bounce botaoDebounce = Bounce(); // objeto do bounce para evitar ruido
+Timezone tempo;
+DHT dht (DHTPIN, DHTTYPE);
+
 // MQTT
 const char *mqtt_server = "broker.hivemq.com";
 const int mqtt_port = 1883;
@@ -24,44 +35,79 @@ float tempoPisca = 1000;
 bool estadoBotao = 0;
 static bool estadoAnteriorBotao = 0;
 
+//voids
 void callback(char *, byte *, unsigned int);
 void mqttConnect(void);
 void controleDosleds(void);
 
 void setup()
 {
-  Serial.begin(9600);
-  conectaWiFi();
-  client.setServer(mqtt_server, mqtt_port);
-  client.setCallback(callback);
-  pinMode(pinLed, OUTPUT);
-  botaoDebounce.attach(pinBotao,INPUT_PULLUP);
-  botaoDebounce.interval(25);
+  Serial.begin(9600); // aciona a Serial
+  dht.begin();
+  conectaWiFi();                                // conecta ao WIfi
+  client.setServer(mqtt_server, mqtt_port);     // vc se conecta ao mqtt
+  client.setCallback(callback);                 // vc ativa o callback
+  pinMode(pinLed, OUTPUT);                      // ativa o 2 como entrada e faz o led piscar
+  botaoDebounce.attach(pinBotao, INPUT_PULLUP); // o botaoDebounce server como um pinMode ele vem da biblioteca bounce2 e evita ruido do botao
+  botaoDebounce.interval(25);                   // para evitar o ruido a cada 25ms desde quando vc aperta ele ignora qualquer comando
+
+  waitForSync();
+  tempo.setLocation("America/Sao_Paulo");
 }
 
 void loop()
 {
-  checkWiFi();
-  if (!client.connected())
-    mqttConnect();
-  client.loop();
+  checkWiFi();             
+  if (!client.connected()) 
+    mqttConnect();         
+  client.loop();           
 
-  static unsigned long tempoAnterior = 0;
-  unsigned long tempoAtual = millis();
-  botaoDebounce.update();
-if(botaoDebounce.fell()){
-  JsonDocument doc;
+  botaoDebounce.update(); 
+  if (botaoDebounce.fell())
+  {
+    JsonDocument doc;
+    doc["botao"] = true;
+    doc["msg"] = "Ola Senai";
+    String mensagem;
+    serializeJson(doc, mensagem);
+    client.publish(mqtt_topic_pub, mensagem.c_str());
+  }
 
-  doc["botao"] = true;
-  doc["msg"] = "Ola Senai";
-  String mensagem = "";
+  // Lê temperatura e umidade a cada 2 segundos
+  static unsigned long ultimoTempoLeitura = 0;
+  unsigned long agora = millis();
+  if (agora - ultimoTempoLeitura >= 3000) {
+    ultimoTempoLeitura = agora;
 
-  serializeJson(doc, mensagem);
-  client.publish(mqtt_topic_pub, mensagem.c_str());
-}
+    float temperatura = dht.readTemperature();
+    float humidade = dht.readHumidity();
+
+    if (isnan(temperatura) || isnan(humidade)) {
+      Serial.println("falha na leitura do sensor");
+    } else {
+      Serial.print("Temperatura: ");
+      Serial.print(temperatura);
+      Serial.println(" °C");
+      Serial.print("Humidade: ");
+      Serial.print(humidade);
+      Serial.println(" %");
+      Serial.print("date time: ");
+      Serial.println(dateTime());
+
+      JsonDocument doc;
+      doc["temperatura"] = temperatura;
+      doc["humidade"] = humidade;
+      doc["timestamp"] = tempo.dateTime();
+
+      String mensagem;
+      serializeJson(doc, mensagem);
+      client.publish(mqtt_topic_pub, mensagem.c_str());
+    }
+  }
 
   controleDosleds();
 }
+
 
 void callback(char *topic, byte *payload, unsigned int lenght)
 {
