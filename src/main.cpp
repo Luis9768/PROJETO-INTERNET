@@ -8,16 +8,20 @@
 #include <Adafruit_Sensor.h>
 #include <DHT.h>
 #include <DHT_U.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
 
 // DHT
 #define DHTPIN 5
 #define DHTTYPE DHT22
+unsigned long tempoenvio = 1000;
 
 WiFiClient espClient;            // Objeto do WIFI para vc se conectar
 PubSubClient client(espClient);  // Se conecta ao mqtt
 Bounce botaoDebounce = Bounce(); // objeto do bounce para evitar ruido
 Timezone tempo;
-DHT dht (DHTPIN, DHTTYPE);
+DHT dht(DHTPIN, DHTTYPE);
+LiquidCrystal_I2C lcd(0x27, 20, 4);
 
 // MQTT
 const char *mqtt_server = "broker.hivemq.com";
@@ -35,39 +39,44 @@ float tempoPisca = 1000;
 bool estadoBotao = 0;
 static bool estadoAnteriorBotao = 0;
 
-//voids
+// voids
 void callback(char *, byte *, unsigned int);
 void mqttConnect(void);
 void controleDosleds(void);
 
 void setup()
 {
-  Serial.begin(9600); // aciona a Serial
-  dht.begin();
+  Serial.begin(9600);                           // aciona a Serial
+  dht.begin();                                  // inica o DHT
   conectaWiFi();                                // conecta ao WIfi
   client.setServer(mqtt_server, mqtt_port);     // vc se conecta ao mqtt
   client.setCallback(callback);                 // vc ativa o callback
   pinMode(pinLed, OUTPUT);                      // ativa o 2 como entrada e faz o led piscar
   botaoDebounce.attach(pinBotao, INPUT_PULLUP); // o botaoDebounce server como um pinMode ele vem da biblioteca bounce2 e evita ruido do botao
   botaoDebounce.interval(25);                   // para evitar o ruido a cada 25ms desde quando vc aperta ele ignora qualquer comando
+ 
+  lcd.init();
+  lcd.backlight();
+  lcd.setCursor(0, 1);
+ 
 
   waitForSync();
-  tempo.setLocation("America/Sao_Paulo");
+  tempo.setLocation("America/Sao_Paulo"); // escolhe a localização e ve hora e data
 }
 
 void loop()
 {
-  checkWiFi();             
-  if (!client.connected()) 
-    mqttConnect();         
-  client.loop();           
+  checkWiFi();
+  if (!client.connected())
+    mqttConnect();
+  client.loop();
 
-  botaoDebounce.update(); 
+  botaoDebounce.update();
   if (botaoDebounce.fell())
   {
     JsonDocument doc;
     doc["botao"] = true;
-    doc["msg"] = "Ola Senai";
+    doc["msg"] = dateTime();
     String mensagem;
     serializeJson(doc, mensagem);
     client.publish(mqtt_topic_pub, mensagem.c_str());
@@ -76,15 +85,19 @@ void loop()
   // Lê temperatura e umidade a cada 2 segundos
   static unsigned long ultimoTempoLeitura = 0;
   unsigned long agora = millis();
-  if (agora - ultimoTempoLeitura >= 3000) {
+  if (agora - ultimoTempoLeitura >= tempoenvio)
+  {
     ultimoTempoLeitura = agora;
 
     float temperatura = dht.readTemperature();
     float humidade = dht.readHumidity();
 
-    if (isnan(temperatura) || isnan(humidade)) {
+    if (isnan(temperatura) || isnan(humidade))
+    {
       Serial.println("falha na leitura do sensor");
-    } else {
+    }
+    else
+    {
       Serial.print("Temperatura: ");
       Serial.print(temperatura);
       Serial.println(" °C");
@@ -93,6 +106,9 @@ void loop()
       Serial.println(" %");
       Serial.print("date time: ");
       Serial.println(dateTime());
+      lcd.setCursor(0,2);
+       lcd.print("umidade: ");
+       lcd.println(humidade);
 
       JsonDocument doc;
       doc["temperatura"] = temperatura;
@@ -107,7 +123,6 @@ void loop()
 
   controleDosleds();
 }
-
 
 void callback(char *topic, byte *payload, unsigned int lenght)
 {
@@ -135,6 +150,10 @@ void callback(char *topic, byte *payload, unsigned int lenght)
   if (!doc["velocidade"].isNull())
   {
     tempoPisca = doc["velocidade"];
+  }
+  if (!doc["tempoEnvio"].isNull())
+  {
+    tempoenvio = doc["tempoEnvio"];
   }
 }
 void mqttConnect()
